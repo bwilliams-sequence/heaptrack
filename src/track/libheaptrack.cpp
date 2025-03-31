@@ -179,6 +179,12 @@ atomic<bool> s_atexit {false};
  */
 atomic<bool> s_forceCleanup {false};
 
+/**
+ * Defines the minimum size of a malloc call that will be tracked.
+ * this is initialized through the env var HEAPTRACK_MALLOC_THRESHOLD
+ */
+static size_t s_malloc_threshold = 0;
+
 // based on: https://stackoverflow.com/a/24315631/35250
 void replaceAll(string& str, const string& search, const string& replace)
 {
@@ -805,7 +811,7 @@ std::atomic<bool> HeapTrack::s_paused {false};
 
 static void heaptrack_realloc_impl(void* ptr_in, size_t size, void* ptr_out)
 {
-    if (!HeapTrack::isPaused() && ptr_out && !RecursionGuard::isActive) {
+    if (size >= s_malloc_threshold && !HeapTrack::isPaused() && ptr_out && !RecursionGuard::isActive) {
         RecursionGuard guard;
 
         debugLog<VeryVerboseOutput>("heaptrack_realloc(%p, %zu, %p)", ptr_in, size, ptr_out);
@@ -828,6 +834,32 @@ void heaptrack_init(const char* outputFileName, heaptrack_callback_t initBeforeC
                     heaptrack_callback_initialized_t initAfterCallback, heaptrack_callback_t stopCallback)
 {
     RecursionGuard guard;
+
+    std::string malloc_threshold = getenv("HEAPTRACK_MALLOC_THRESHOLD");
+    if (!malloc_threshold.empty()) {
+        usize_t multiplier = 1;
+        char last_char = malloc_threshold.back();
+        switch (last_char) {
+            case 'k':
+            case 'K':
+                multiplier = 1024;
+                malloc_threshold.pop_back();
+                break;
+            case 'm':
+            case 'M':
+                multiplier = 1024 * 1024;
+                malloc_threshold.pop_back();
+                break;
+            case 'g':
+            case 'G':
+                multiplier = 1024 * 1024 * 1024;
+                malloc_threshold.pop_back();
+                break;
+        }
+        s_malloc_threshold = std::stoul(malloc_threshold) * multiplier;
+        debugLog<MinimalOutput>("HEAPTRACK_MALLOC_THRESHOLD: %zu", s_malloc_threshold);
+    }
+
     // initialize
     startTime();
     s_forceCleanup.store(false);
@@ -869,7 +901,7 @@ void heaptrack_resume()
 
 void heaptrack_malloc(void* ptr, size_t size)
 {
-    if (!HeapTrack::isPaused() && ptr && !RecursionGuard::isActive) {
+    if (size >= s_malloc_threshold && !HeapTrack::isPaused() && ptr && !RecursionGuard::isActive) {
         RecursionGuard guard;
 
         debugLog<VeryVerboseOutput>("heaptrack_malloc(%p, %zu)", ptr, size);
