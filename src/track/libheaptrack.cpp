@@ -862,7 +862,7 @@ void heaptrack_init(const char* outputFileName, heaptrack_callback_t initBeforeC
             // Strip the last character if it's a scalar, which should
             // leave us with a string that can be parsed as an unsigned long.
             if (popBack) {
-                mallocThreshold.popBack();
+                mallocThreshold.pop_back();
             }
 
             try {
