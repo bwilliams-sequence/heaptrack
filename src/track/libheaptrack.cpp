@@ -183,7 +183,7 @@ atomic<bool> s_forceCleanup {false};
  * Defines the minimum size of a malloc call that will be tracked.
  * this is initialized through the env var HEAPTRACK_MALLOC_THRESHOLD
  */
-static size_t s_malloc_threshold = 0;
+static size_t s_mallocThreshold = 0;
 
 // based on: https://stackoverflow.com/a/24315631/35250
 void replaceAll(string& str, const string& search, const string& replace)
@@ -811,7 +811,7 @@ std::atomic<bool> HeapTrack::s_paused {false};
 
 static void heaptrack_realloc_impl(void* ptr_in, size_t size, void* ptr_out)
 {
-    if (size >= s_malloc_threshold && !HeapTrack::isPaused() && ptr_out && !RecursionGuard::isActive) {
+    if (size >= s_mallocThreshold && !HeapTrack::isPaused() && ptr_out && !RecursionGuard::isActive) {
         RecursionGuard guard;
 
         debugLog<VeryVerboseOutput>("heaptrack_realloc(%p, %zu, %p)", ptr_in, size, ptr_out);
@@ -835,33 +835,42 @@ void heaptrack_init(const char* outputFileName, heaptrack_callback_t initBeforeC
 {
     RecursionGuard guard;
 
-    const auto malloc_threshold_env = getenv("HEAPTRACK_MALLOC_THRESHOLD");
-    if (malloc_threshold_env) {
-        std::string malloc_threshold(malloc_threshold_env);
-        if (!malloc_threshold.empty()) {
-            char last_char = malloc_threshold.back();
-            size_t multiplier = 1;
-            switch (last_char) {
+    const auto mallocThresholdEnv = getenv("HEAPTRACK_MALLOC_THRESHOLD");
+    if (mallocThresholdEnv) {
+        std::string mallocThreshold(mallocThresholdEnv);
+        if (!mallocThreshold.empty()) {
+            size_t scalar = 1;
+            bool popBack = true;
+            switch (mallocThreshold.back()) {
                 case 'k':
                 case 'K':
-                    multiplier = 1024;
-                    malloc_threshold.pop_back();
+                    scalar = 1024;
                     break;
                 case 'm':
                 case 'M':
-                    multiplier = 1024 * 1024;
-                    malloc_threshold.pop_back();
+                    scalar = 1024 * 1024;
                     break;
                 case 'g':
                 case 'G':
-                    multiplier = 1024 * 1024 * 1024;
-                    malloc_threshold.pop_back();
+                    scalar = 1024 * 1024 * 1024;
                     break;
                 default:
+                    popBack = false;
                     break;
             }
-            s_malloc_threshold = std::stoul(malloc_threshold) * multiplier;
-            debugLog<MinimalOutput>("HEAPTRACK_MALLOC_THRESHOLD: %zu", s_malloc_threshold);
+
+            // Strip the last character if it's a scalar, which should
+            // leave us with a string that can be parsed as an unsigned long.
+            if (popBack) {
+                mallocThreshold.popBack();
+            }
+
+            try {
+                s_mallocThreshold = std::stoul(mallocThreshold) * scalar;
+                debugLog<MinimalOutput>("HEAPTRACK_MALLOC_THRESHOLD: %zu", s_mallocThreshold);
+            } catch (...) {
+                debugLog<WarningOutput>("Invalid HEAPTRACK_MALLOC_THRESHOLD: %s", mallocThresholdEnv);
+            }
         }
     }
 
@@ -906,7 +915,7 @@ void heaptrack_resume()
 
 void heaptrack_malloc(void* ptr, size_t size)
 {
-    if (size >= s_malloc_threshold && !HeapTrack::isPaused() && ptr && !RecursionGuard::isActive) {
+    if (size >= s_mallocThreshold && !HeapTrack::isPaused() && ptr && !RecursionGuard::isActive) {
         RecursionGuard guard;
 
         debugLog<VeryVerboseOutput>("heaptrack_malloc(%p, %zu)", ptr, size);
