@@ -837,8 +837,8 @@ void heaptrack_init(const char* outputFileName, heaptrack_callback_t initBeforeC
 
     std::string malloc_threshold = getenv("HEAPTRACK_MALLOC_THRESHOLD");
     if (!malloc_threshold.empty()) {
-        usize_t multiplier = 1;
         char last_char = malloc_threshold.back();
+        size_t multiplier = 1;
         switch (last_char) {
             case 'k':
             case 'K':
@@ -854,6 +854,8 @@ void heaptrack_init(const char* outputFileName, heaptrack_callback_t initBeforeC
             case 'G':
                 multiplier = 1024 * 1024 * 1024;
                 malloc_threshold.pop_back();
+                break;
+            default:
                 break;
         }
         s_malloc_threshold = std::stoul(malloc_threshold) * multiplier;
