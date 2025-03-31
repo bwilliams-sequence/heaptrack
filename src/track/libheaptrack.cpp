@@ -835,7 +835,8 @@ void heaptrack_init(const char* outputFileName, heaptrack_callback_t initBeforeC
 {
     RecursionGuard guard;
 
-    std::string malloc_threshold = getenv("HEAPTRACK_MALLOC_THRESHOLD");
+    char * malloc_threshold = getenv("HEAPTRACK_MALLOC_THRESHOLD");
+    std::string malloc_threshold_str = malloc_threshold ? malloc_threshold : "";
     if (!malloc_threshold.empty()) {
         char last_char = malloc_threshold.back();
         size_t multiplier = 1;
